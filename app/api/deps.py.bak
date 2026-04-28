@@ -1,0 +1,50 @@
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+import jwt
+from sqlalchemy.orm import Session
+from pydantic import ValidationError
+
+from app.db.session import get_db
+from app.core.security import SECRET_KEY, ALGORITHM
+from app.models.user import User
+
+# Đường dẫn API mà Frontend sẽ gọi để lấy Token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+
+def get_current_user(
+    db: Session = Depends(get_db), 
+    token: str = Depends(oauth2_scheme)
+) -> User:
+    """Người gác cổng 1: Kiểm tra xem người dùng có thẻ JWT hợp lệ không"""
+    try:
+        # Giải mã thẻ từ
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Token không hợp lệ.")
+    except (jwt.PyJWTError, ValidationError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Không thể xác thực thông tin (Token hết hạn hoặc sai).",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Tìm user trong DB
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy người dùng.")
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Tài khoản đã bị vô hiệu hóa.")
+    
+    return user
+
+def get_current_admin_user(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """Người gác cổng 2: Kiểm tra xem người dùng đó có phải Admin không"""
+    if current_user.roles != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Bạn không có quyền thực hiện hành động này. (Yêu cầu quyền Admin)"
+        )
+    return current_user

@@ -1,0 +1,26 @@
+# 1. Môi trường ảo Python
+venv/
+env/
+
+# 2. File biến môi trường
+.env
+
+# 3. File Cache và biên dịch của Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 4. File cấu hình của các phần mềm viết code
+.vscode/
+.idea/
+
+# 5. File Log
+*.log
+
+# 6. File rác của hệ điều hành
+.DS_Store
+Thumbs.db
+
+# 7. File Test
+tests/
