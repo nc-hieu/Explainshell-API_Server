@@ -3,6 +3,7 @@ from app.api.v1.endpoints import users, auth, histories
 from app.api.v1.endpoints import (
     programs,
     categories,
+    uploads,
     program_categories,
     option_groups,
     options,
@@ -20,6 +21,7 @@ api_router.include_router(favorites.router, prefix="/favorites", tags=["Favorite
 api_router.include_router(histories.router, prefix="/histories", tags=["Histories"])
 api_router.include_router(programs.router, prefix="/programs", tags=["Programs"])
 api_router.include_router(categories.router, prefix="/categories", tags=["Categories"])
+api_router.include_router(uploads.router, prefix="/upload", tags=["Uploads"])
 api_router.include_router(program_categories.router, prefix="/program-categories", tags=["Program - Categories Link"])
 api_router.include_router(option_groups.router, prefix="/option-groups", tags=["Option Groups"])
 api_router.include_router(options.router, prefix="/options", tags=["Options"])
