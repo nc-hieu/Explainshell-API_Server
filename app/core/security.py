@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Union
 from jose import jwt
 from passlib.context import CryptContext
@@ -30,8 +30,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_password_hash(password: str) -> str:
     """
     Băm mật khẩu thành một chuỗi mã hóa không thể dịch ngược.
-    Dùng khi Đăng ký hoặc Admin tạo/đổi mật khẩu.
+    Cắt ngắn xuống 72 ký tự để tránh lỗi giới hạn của Bcrypt.
     """
+    if isinstance(password, str):
+        password = password[:72] 
     return pwd_context.hash(password)
 
 
@@ -40,14 +42,10 @@ def get_password_hash(password: str) -> str:
 # ==========================================
 
 def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
-    """
-    Tạo ra một chuỗi JWT mã hóa thông tin người dùng (subject thường là user_id).
-    Token này là "chìa khóa" để gọi các API Private.
-    """
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         
     to_encode = {"exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
