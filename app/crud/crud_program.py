@@ -20,6 +20,7 @@ def get_programs(db: Session, skip: int = 0, limit: int = 100) -> List[Program]:
     """Lấy danh sách Program kèm danh mục"""
     return db.query(Program)\
              .options(selectinload(Program.categories))\
+             .order_by(Program.created_at.asc())\
              .offset(skip).limit(limit).all()
 
 
