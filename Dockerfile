@@ -9,7 +9,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Cài đặt các thư viện cần thiết (FastAPI, Uvicorn, SQLAlchemy, psycopg2...)
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --default-timeout=100  --no-cache-dir -r requirements.txt
 
 # Copy toàn bộ mã nguồn từ máy bạn vào thư mục /app trong container
 COPY . .
