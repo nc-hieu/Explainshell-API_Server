@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.schemas.category import Category
 from app.schemas.option_group import OptionGroup
 from app.schemas.option import Option
+from app.schemas.note import Note
 from app.schemas.example import Example
 
 # ==========================================
@@ -95,6 +96,7 @@ class ProgramDetail(Program):
     categories: List[Category] = []
     option_groups: List[OptionGroup] = []
     options: List[Option] = []
+    notes: List[Note] = []
     examples: List[Example] = []
     
     # man_pages: List[ManPage] = [] # Nếu bạn đã tạo schema ManPage thì bỏ comment dòng này

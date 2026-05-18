@@ -1,7 +1,8 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, with_parent
 from app.models.category import Category
 from app.models.program import Program
+from app.models.topic import Topic
 from app.schemas.category import CategoryCreate, CategoryUpdate
 
 # ==========================================
@@ -9,53 +10,73 @@ from app.schemas.category import CategoryCreate, CategoryUpdate
 # ==========================================
 
 def get_category(db: Session, category_id: int) -> Optional[Category]:
-    """Lấy chi tiết danh mục VÀ các lệnh (programs) nằm trong nó"""
     return db.query(Category)\
              .filter(Category.id == category_id)\
-             .options(selectinload(Category.programs))\
+             .options(
+                 selectinload(Category.programs),
+                 selectinload(Category.topic) 
+             )\
              .first()
 
 def get_category_by_slug(db: Session, slug: str) -> Optional[Category]:
-    """Lấy chi tiết danh mục theo Slug VÀ các lệnh nằm trong nó (Rất tốt cho SEO/Frontend)"""
     return db.query(Category)\
              .filter(Category.slug == slug)\
-             .options(selectinload(Category.programs))\
+             .options(
+                 selectinload(Category.programs),
+                 selectinload(Category.topic)
+             )\
              .first()
 
-def get_categories(db: Session, skip: int = 0, limit: int = 100) -> List[Category]:
-    """Lấy danh sách tất cả danh mục"""
-    return db.query(Category).offset(skip).limit(limit).all()
+def get_categories(db: Session, skip: int = 0, limit: int = 100, topic_id: Optional[int] = None) -> List[Category]:
+    """Lấy danh sách danh mục (có hỗ trợ lọc theo topic_id)"""
+    query = db.query(Category).options(selectinload(Category.topic))
+    
+    if topic_id is not None:
+        query = query.filter(Category.topic_id == topic_id)
+        
+    return query.offset(skip).limit(limit).all()
 
-def get_category_tree(db: Session) -> List[Category]:
+def get_category_tree(db: Session, topic_id: Optional[int] = None) -> List[Category]:
     """
-    Lấy danh sách danh mục theo dạng cây.
-    Đã nâng cấp: Load tới 3 cấp (Gốc -> Bậc 2 -> Bậc 3)
+    Lấy danh sách danh mục theo dạng cây (Gốc -> Bậc 2 -> Bậc 3).
+    [CẬP NHẬT]: Hỗ trợ lọc theo topic_id để hiển thị cây của từng Hệ sinh thái riêng biệt.
     """
-    return db.query(Category)\
-        .filter(Category.parent_id == None)\
-        .options(
-            selectinload(Category.subcategories)\
-            .selectinload(Category.subcategories)
-        )\
-        .all()
+    query = db.query(Category).filter(Category.parent_id == None)
+    
+    # Nếu truyền topic_id, chỉ lấy các danh mục gốc thuộc topic đó
+    if topic_id is not None:
+        query = query.filter(Category.topic_id == topic_id)
+        
+    return query.options(
+        selectinload(Category.topic), # Tải thông tin Topic
+        selectinload(Category.subcategories)\
+        .selectinload(Category.subcategories)
+    ).all()
 
 
 # 1. Hàm lấy danh mục gốc (cha)
-def get_root_categories(db: Session) -> List[Category]:
-    """Lấy danh sách các danh mục cấp 1 (Không có parent_id)"""
-    return db.query(Category).filter(Category.parent_id.is_(None)).all()
+def get_root_categories(db: Session, topic_slug: Optional[str] = None) -> List[Category]:
+    """
+    Lấy danh sách các danh mục cấp 1 (Không có parent_id).
+    [CẬP NHẬT]: Có hỗ trợ lọc theo topic_id (Hệ sinh thái).
+    """
+    query = db.query(Category).filter(Category.parent_id.is_(None))
+    
+    # Nếu có truyền topic_slug, thêm điều kiện lọc
+    if topic_slug:
+        query = query.join(Category.topic).filter(Topic.slug == topic_slug)
+        
+    return query.all()
 
 # 2. Hàm đếm số lượng cho 1 danh mục
 def get_category_stats(db: Session, category_id: int) -> Optional[dict]:
-    """Đếm số lượng danh mục con và số lượng lệnh của 1 danh mục"""
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
         return None
         
-    # Đếm số danh mục con (truy vấn cực nhanh)
     sub_count = db.query(Category).filter(Category.parent_id == category_id).count()
     
-    # Đếm số lệnh thuộc danh mục này (Không cần load toàn bộ object Program ra)
+    # Sửa lại dòng này: dùng chuỗi 'programs' thay vì Category.programs
     prog_count = db.query(Program).with_parent(category, Category.programs).count()
     
     return {

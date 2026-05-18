@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -20,24 +20,27 @@ router = APIRouter()
 # LƯU Ý: Phải đặt API /tree lên TRƯỚC API /{id} để FastAPI không nhầm chữ "tree" là một ID
 @router.get("/tree", response_model=List[CategoryWithSub])
 def read_category_tree(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    topic_id: Optional[int] = None
 ) -> Any:
     """
     Lấy danh sách danh mục theo cấu trúc Cây (Tree).
     Trả về các danh mục gốc (parent_id = null) và lồng ghép sẵn các danh mục con bên trong.
     Tuyệt vời để làm Sidebar Menu cho Frontend.
     """
-    return crud_category.get_category_tree(db)
+    return crud_category.get_category_tree(db, topic_id=topic_id)
 
 @router.get("/roots", response_model=List[CategoryBasic])
 def read_root_categories(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    topic_slug: Optional[str] = None 
 ) -> Any:
     """
     [TIỆN ÍCH] Lấy danh sách các Danh mục gốc (Cấp 1 - parent_id = null).
+    Có thể truyền thêm tham số ?topic_id=1 để lấy các danh mục gốc của riêng một Topic.
     Thường dùng để vẽ Menu chính hoặc Sidebar.
     """
-    return crud_category.get_root_categories(db=db)
+    return crud_category.get_root_categories(db=db, topic_slug=topic_slug)
 
 @router.post("/bulk-stats", response_model=List[CategoryStats])
 def get_bulk_categories_stats_api(
@@ -55,10 +58,11 @@ def get_bulk_categories_stats_api(
 def read_categories(
     db: Session = Depends(get_db),
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100,
+    topic_id: Optional[int] = None
 ) -> Any:
     """Lấy danh sách danh mục cơ bản (Hỗ trợ phân trang)"""
-    return crud_category.get_categories(db, skip=skip, limit=limit)
+    return crud_category.get_categories(db, skip=skip, limit=limit, topic_id=topic_id)
 
 @router.get("/slug/{slug}", response_model=CategoryWithSub)
 def read_category_by_slug(

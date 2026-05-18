@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
+# Import class Base của hệ thống
 from app.db.session import Base
 
 class Program(Base):
@@ -35,11 +36,14 @@ class Program(Base):
     
     # 3. Quan hệ với Option (1 Program có nhiều Options)
     options = relationship("Option", back_populates="program", cascade="all, delete-orphan")
+
+    # 4. Quan hệ với Note (1 Program có nhiều Notes)
+    notes = relationship("Note", back_populates="program", cascade="all, delete-orphan")
     
-    # 4. Quan hệ với Example (1 Program có nhiều Examples)
+    # 5. Quan hệ với Example (1 Program có nhiều Examples)
     examples = relationship("Example", back_populates="program", cascade="all, delete-orphan")
     
-    # 5. Quan hệ với Man Page (1 Program có nhiều Sections trong Man Page)
+    # 6. Quan hệ với Man Page (1 Program có nhiều Sections trong Man Page)
     man_pages = relationship("ManPage", back_populates="program", cascade="all, delete-orphan")
 
     def __repr__(self):

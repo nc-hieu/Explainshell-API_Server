@@ -15,6 +15,14 @@ class ProgramInfoForCategory(BaseModel):
     class Config:
         from_attributes = True
 
+class TopicInfoForCategory(BaseModel):
+    id: int
+    name: str
+    slug: str
+    
+    class Config:
+        from_attributes = True
+
 # ==========================================
 # 1. SCHEMA CƠ BẢN (Dùng chung)
 # ==========================================
@@ -41,6 +49,7 @@ class CategoryBase(BaseModel):
     icon_url: Optional[str] = None
     is_featured: bool = False
     parent_id: Optional[int] = None # ID của danh mục cha (Nếu là Null thì đây là danh mục gốc)
+    topic_id: Optional[int] = None
 
 
 # ==========================================
@@ -69,7 +78,7 @@ class Category(CategoryBase):
     updated_at: Optional[datetime] = None
 
     programs: List[ProgramInfoForCategory] = []
-
+    topic: Optional[TopicInfoForCategory] = None
     class Config:
         from_attributes = True # Dành cho Pydantic V2 để đọc Object SQLAlchemy
 

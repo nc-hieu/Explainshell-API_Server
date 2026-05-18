@@ -16,6 +16,9 @@ class Category(Base):
     
     # Quan hệ cha-con (Self-referencing)
     parent_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
+
+    # Khóa ngoại liên kết tới topics.id
+    topic_id = Column(Integer, ForeignKey("topics.id", ondelete="CASCADE"))
     
     # Vector tìm kiếm
     fts_category_vector = Column(TSVECTOR)
@@ -31,6 +34,9 @@ class Category(Base):
 
     # Quan hệ nhiều-nhiều với Program
     programs = relationship("Program", secondary="program_categories", back_populates="categories")
+
+    # Quan hệ trỏ ngược lại Topic
+    topic = relationship("Topic", back_populates="categories")
 
     def __repr__(self):
         return f"<Category(name='{self.name}', slug='{self.slug}')>"
