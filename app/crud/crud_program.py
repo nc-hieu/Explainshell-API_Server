@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from app.models.program import Program
 from app.models.category import Category
+from app.models.topic import Topic
 from app.schemas.program import ProgramCreate, ProgramUpdate
 from typing import List, Optional
 
@@ -65,7 +66,7 @@ def search_programs(db: Session, query: str):
     Sử dụng toán tử @@ để match với vector đã được index.
     """
     return db.query(Program).filter(
-        Program.fts_program_vector.op('@@')(func.plainto_tsquery('english', query))
+        Program.fts_program_vector.op('@@')(func.plainto_tsquery('simple', query))
     ).all()
 
 
@@ -94,6 +95,32 @@ def get_programs_by_category_slug(db: Session, category_slug: str) -> List[Progr
                  .all()
                  
     return programs
+
+
+# ==========================================
+# LẤY PROGRAMS THEO TOPIC CÓ PHÂN TRANG
+# ==========================================
+def get_programs_by_topic_slug(
+    db: Session, 
+    topic_slug: str, 
+    skip: int = 0, 
+    limit: int = 100
+) -> List[Program]:
+    """
+    Lấy danh sách câu lệnh thuộc về một Hệ sinh thái (Topic) qua slug.
+    - Hỗ trợ phân trang (skip, limit) để tối ưu hiệu năng.
+    - Sắp xếp theo thời gian tạo từ cũ đến mới (asc) để giữ đúng thứ tự.
+    - Dùng distinct() để tránh trùng lặp bản ghi.
+    """
+    return db.query(Program)\
+             .join(Program.categories)\
+             .join(Category.topic)\
+             .filter(Topic.slug == topic_slug)\
+             .distinct()\
+             .order_by(Program.created_at.asc())\
+             .offset(skip)\
+             .limit(limit)\
+             .all()
 
 # ==========================================
 # 2. CÁC HÀM GHI DỮ LIỆU (CREATE, UPDATE, DELETE)

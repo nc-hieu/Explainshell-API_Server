@@ -11,6 +11,7 @@ from app.crud.crud_program import (
     get_program_details, 
     get_program_by_slug,
     get_programs_by_category_slug,
+    get_programs_by_topic_slug,
     search_programs, 
     create_program, 
     update_program, 
@@ -109,6 +110,25 @@ def read_programs_by_category(
     # Để Frontend hiển thị giao diện "Chưa có lệnh nào trong danh mục này".
     return programs
 
+@router.get("/topic/{topic_slug}", response_model=List[ProgramShort])
+def read_programs_by_topic_slug_api(
+    topic_slug: str,
+    db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 100
+) -> Any:
+    """
+    [TIỆN ÍCH FRONTEND] Lấy danh sách câu lệnh thuộc một Hệ sinh thái (Topic) qua Slug.
+    - URL mẫu: GET /api/v1/programs/topic/linux?skip=0&limit=20
+    - Dữ liệu trả về siêu nhẹ (chỉ có name, slug, description) phù hợp làm trang danh sách, từ điển tra cứu.
+    """
+    programs = get_programs_by_topic_slug(
+        db=db, topic_slug=topic_slug, skip=skip, limit=limit
+    )
+    
+    # Trả về mảng rỗng [] nếu chưa có dữ liệu chứ không báo lỗi 404, 
+    # giúp Frontend dễ dàng hiển thị giao diện "Chưa có câu lệnh nào".
+    return programs
 
 # ==========================================
 # 2. API GHI DỮ LIỆU (PRIVATE - Yêu cầu Token của Admin)

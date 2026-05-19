@@ -103,8 +103,6 @@ def update_categories_for_program_api(
     return program
 
 
-
-
 @router.delete("/{program_id}/category/{category_id}", response_model=Program)
 def unlink_program_from_category(
     *,
