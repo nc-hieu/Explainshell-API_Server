@@ -6,6 +6,7 @@ class OSDistributionBase(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
+    icon_url: Optional[str] = None
 
 class OSDistributionCreate(OSDistributionBase):
     pass
@@ -14,6 +15,7 @@ class OSDistributionUpdate(BaseModel):
     name: Optional[str] = None
     slug: Optional[str] = None
     description: Optional[str] = None
+    icon_url: Optional[str] = None
 
 class OSDistribution(OSDistributionBase):
     id: int

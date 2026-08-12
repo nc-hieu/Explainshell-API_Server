@@ -55,3 +55,35 @@ def upload_image(
         "url": f"/uploads/{unique_filename}",
         "message": "Upload thành công!"
     }
+
+@router.delete("/{filename}")
+def delete_image(
+    filename: str,
+    current_admin: User = Depends(get_current_admin_user) # Chỉ Admin mới được xóa
+) -> Any:
+    """
+    API Xóa ảnh (Chỉ dành cho Admin).
+    Truyền vào tên file (VD: /api/v1/uploads/ten-file.png) để xóa khỏi hệ thống.
+    """
+    # 1. Bảo mật: Làm sạch tên file để chống lỗ hổng Path Traversal
+    # os.path.basename sẽ biến đổi "../../../etc/passwd" thành "passwd"
+    safe_filename = os.path.basename(filename)
+    
+    # 2. Tạo đường dẫn tuyệt đối/tương đối tới file
+    file_path = os.path.join(UPLOAD_DIR, safe_filename)
+
+    # 3. Kiểm tra xem file có tồn tại trên ổ cứng không
+    if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Không tìm thấy ảnh này trên hệ thống.")
+
+    # 4. Thực hiện xóa file
+    try:
+        os.remove(file_path)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi hệ thống khi xóa ảnh: {str(e)}")
+
+    # 5. Trả về thông báo thành công
+    return {
+        "message": "Xóa ảnh thành công!",
+        "deleted_file": safe_filename
+    }
