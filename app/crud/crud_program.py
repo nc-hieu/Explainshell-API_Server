@@ -3,6 +3,8 @@ from sqlalchemy import func
 from app.models.program import Program
 from app.models.category import Category
 from app.models.topic import Topic
+from app.models.option import Option
+from app.models.man_page import ManPage
 from app.schemas.program import ProgramCreate, ProgramUpdate
 from typing import List, Optional
 
@@ -17,6 +19,7 @@ def get_program(db: Session, program_id: int) -> Optional[Program]:
              .options(selectinload(Program.categories))\
              .first()
 
+
 def get_programs(db: Session, skip: int = 0, limit: int = 100) -> List[Program]:
     """Lấy danh sách Program kèm danh mục"""
     return db.query(Program)\
@@ -29,22 +32,30 @@ def get_program_by_name(db: Session, name: str):
     """Lấy lệnh theo tên (Để kiểm tra trùng lặp khi tạo mới)"""
     return db.query(Program).filter(Program.name == name).options(selectinload(Program.categories)).first()
 
+
 def get_program_by_slug(db: Session, slug: str):
     """Lấy lệnh theo slug (Để kiểm tra trùng lặp khi tạo mới)"""
     return db.query(Program).filter(Program.slug == slug).options(selectinload(Program.categories)).first()
 
+
 def get_program_by_slug(db: Session, slug: str):
     """
-    [QUAN TRỌNG] Lấy toàn bộ chi tiết của 1 lệnh dựa vào Slug (Phục vụ SEO URL).
-    Dùng `selectinload` để tải sẵn Categories, Options, Groups và Examples.
+    Lấy chi tiết 1 lệnh dựa vào Slug và sắp xếp options theo id tăng dần bằng Python.
     """
-    return db.query(Program).options(
+    program = db.query(Program).options(
         selectinload(Program.categories),
         selectinload(Program.option_groups),
         selectinload(Program.options),
-        selectinload(Program.examples)
-        # selectinload(Program.man_pages) # Bỏ comment nếu bạn muốn kéo luôn Man Page
+        selectinload(Program.examples),
+        selectinload(Program.man_pages)
     ).filter(Program.slug == slug).first()
+
+    # Nếu tìm thấy program, tiến hành sắp xếp trực tiếp trên danh sách kết quả
+    if program and program.options:
+        program.options.sort(key=lambda opt: opt.id)
+
+    return program
+
 
 def get_program_details(db: Session, program_id: int):
     """
@@ -60,6 +71,7 @@ def get_program_details(db: Session, program_id: int):
         # selectinload(Program.man_pages) # Mở ra nếu bạn dùng bảng này
     ).filter(Program.id == program_id).first()
 
+
 def search_programs(db: Session, query: str):
     """
     Tìm kiếm Full-text bằng TSVECTOR trong PostgreSQL.
@@ -68,6 +80,62 @@ def search_programs(db: Session, query: str):
     return db.query(Program).filter(
         Program.fts_program_vector.op('@@')(func.plainto_tsquery('simple', query))
     ).all()
+
+
+def explain_command(db: Session, full_command: str):
+    """
+    Thuật toán phân tích cú pháp (Parser) và giải thích lệnh.
+    """
+    # 1. Tách chuỗi thành mảng bằng khoảng trắng
+    parts = full_command.strip().split()
+    if not parts:
+        return None
+        
+    # Từ đầu tiên luôn là tên lệnh (VD: "ps", "tar")
+    program_name = parts[0].lower()
+    args = parts[1:]
+
+    # 2. Tìm kiếm lệnh trong DB
+    program = db.query(Program).filter(Program.name == program_name).first()
+    if not program:
+        return None
+
+    # 3. Phân tích các đối số (args)
+    parsed_short_flags = []
+    parsed_long_flags = []
+    unmatched = []
+
+    for arg in args:
+        if arg.startswith('--'):
+            # Là cờ dài (VD: --help)
+            parsed_long_flags.append(arg)
+        elif arg.startswith('-') and len(arg) > 1:
+            # Là cờ ngắn gộp (VD: -aux). Bóc tách thành -a, -u, -x
+            for char in arg[1:]:
+                parsed_short_flags.append(f"-{char}")
+        elif program_name in ['ps', 'tar'] and not arg.startswith('-') and not '/' in arg and not '.' in arg:
+            # XỬ LÝ ĐẶC BIỆT cho ps, tar (BSD style): Người dùng gõ "aux" thay vì "-aux"
+            # Ta tự động bóc tách và thêm dấu gạch ngang vào để khớp với DB
+            for char in arg:
+                parsed_short_flags.append(f"-{char}")
+        else:
+            # Các thành phần không phải cờ lệnh (Tên file, text thường...)
+            unmatched.append(arg)
+
+    # 4. Tìm kiếm các Option trong DB khớp với các cờ đã tách
+    matched_options = []
+    if parsed_short_flags or parsed_long_flags:
+        matched_options = db.query(Option).filter(
+            Option.program_id == program.id,
+            (Option.short_name.in_(parsed_short_flags)) | (Option.long_name.in_(parsed_long_flags))
+        ).all()
+
+    # 5. Trả về kết quả
+    return {
+        "program": program,
+        "matched_options": matched_options,
+        "unmatched_args": unmatched
+    }
 
 
 def get_programs_by_category_slug(db: Session, category_slug: str) -> List[Program]:
@@ -143,6 +211,7 @@ def create_program(db: Session, program_in: ProgramCreate):
     db.refresh(db_program)
     return db_program
 
+
 def update_program(db: Session, program_id: int, program_in: ProgramUpdate):
     """Cập nhật lệnh, có hỗ trợ cập nhật lại danh sách Danh mục"""
     db_program = get_program(db, program_id)
@@ -166,6 +235,7 @@ def update_program(db: Session, program_id: int, program_in: ProgramUpdate):
     db.refresh(db_program)
     return db_program
 
+
 def delete_program(db: Session, program_id: int):
     """Xóa lệnh (PostgreSQL sẽ tự động CASCADE xóa luôn các Options, Examples...)"""
     db_program = get_program(db, program_id)
@@ -173,6 +243,7 @@ def delete_program(db: Session, program_id: int):
         db.delete(db_program)
         db.commit()
     return db_program
+
 
 def add_category_to_program(db: Session, program_id: int, category_id: int) -> Optional[Program]:
     """Nối một Danh mục vào một Câu lệnh (Thêm vào bảng trung gian)"""
@@ -186,6 +257,7 @@ def add_category_to_program(db: Session, program_id: int, category_id: int) -> O
         db.refresh(program)
         
     return program
+
 
 def remove_category_from_program(db: Session, program_id: int, category_id: int) -> Optional[Program]:
     """Gỡ một Danh mục khỏi một Câu lệnh (Xóa khỏi bảng trung gian)"""

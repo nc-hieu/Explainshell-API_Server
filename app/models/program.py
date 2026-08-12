@@ -43,8 +43,12 @@ class Program(Base):
     # 5. Quan hệ với Example (1 Program có nhiều Examples)
     examples = relationship("Example", back_populates="program", cascade="all, delete-orphan")
     
-    # 6. Quan hệ với Man Page (1 Program có nhiều Sections trong Man Page)
+    # 6. Quan hệ với Histories
+    histories = relationship("History", back_populates="program")
+
+    # 7. Quan hệ với Man Page (1 Program có nhiều Sections trong Man Page)
     man_pages = relationship("ManPage", back_populates="program", cascade="all, delete-orphan")
+
 
     def __repr__(self):
         return f"<Program(name='{self.name}')>"

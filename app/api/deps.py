@@ -4,6 +4,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from typing import Optional
 
 # Import cấu hình và DB
 from app.db.session import SessionLocal, get_db
@@ -22,6 +23,38 @@ from app.crud.crud_user import (
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login"
 )
+
+
+# ==========================================
+# DEPENDENCY TÙY CHỌN (KHÔNG BẮT BUỘC ĐĂNG NHẬP)
+# ==========================================
+# auto_error=False giúp FastAPI không quăng lỗi 401 nếu request không có Token
+reusable_oauth2_optional = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/auth/login",
+    auto_error=False 
+)
+
+def get_current_user_optional(
+    db: Session = Depends(get_db), 
+    token: Optional[str] = Depends(reusable_oauth2_optional)
+) -> Optional[User]:
+    """
+    Dependency này dùng cho các API dạng "Public nhưng có ưu đãi cho User".
+    - Nếu không có token -> Trả về None (Không báo lỗi)
+    - Nếu có token -> Giải mã và trả về object User.
+    - Nếu token sai/hết hạn -> Vẫn trả về None để coi như là khách.
+    """
+    if not token:
+        return None
+        
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        token_data = TokenPayload(**payload)
+    except (JWTError, ValidationError):
+        return None
+    
+    user = get_user(db, user_id=int(token_data.sub))
+    return user
 
 
 # ==========================================
@@ -81,3 +114,4 @@ def get_current_admin_user(
             detail="Bạn không có quyền quản trị (Admin) để thực hiện hành động này"
         )
     return current_user
+

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -13,10 +13,13 @@ from app.crud.crud_program import (
     get_programs_by_category_slug,
     get_programs_by_topic_slug,
     search_programs, 
+    explain_command,
     create_program, 
     update_program, 
     delete_program
 )
+
+from app.crud.crud_history import create_history 
 
 # Import các định dạng dữ liệu từ Schemas
 from app.schemas.program import (
@@ -27,9 +30,12 @@ from app.schemas.program import (
     ProgramDetail
 )
 
+from app.schemas.history import HistoryCreate
+
 # Import DB session và Dependency xác thực
 from app.db.session import get_db
 from app.api.deps import get_current_admin_user
+from app.api.deps import get_current_user_optional
 from app.models.user import User
 
 router = APIRouter()
@@ -47,16 +53,94 @@ def read_programs(
     """Lấy danh sách các lệnh cơ bản (Hỗ trợ phân trang)"""
     return get_programs(db, skip=skip, limit=limit)
 
+# @router.get("/search", response_model=List[ProgramSchema])
+# def search_programs_api(
+#     query: str,
+#     db: Session = Depends(get_db)
+# ) -> Any:
+#     """
+#     Tìm kiếm lệnh siêu tốc bằng Full-text Search.
+#     Ví dụ: /api/v1/programs/search?query=list
+#     """
+#     return search_programs(db, query=query)
+
 @router.get("/search", response_model=List[ProgramSchema])
 def search_programs_api(
     query: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ) -> Any:
     """
     Tìm kiếm lệnh siêu tốc bằng Full-text Search.
-    Ví dụ: /api/v1/programs/search?query=list
+    Chỉ lưu lịch sử tìm kiếm NẾU người dùng đã đăng nhập.
     """
-    return search_programs(db, query=query)
+    # 1. Gọi hàm search tìm kết quả
+    results = search_programs(db, query=query)
+    
+    # 2. KIỂM TRA ĐĂNG NHẬP ĐỂ LƯU LỊCH SỬ
+    if current_user:
+        # Nếu có kết quả (len > 0), lấy ID của lệnh đầu tiên làm đại diện
+        if results and len(results) > 0:
+            history_data = HistoryCreate(
+                command_text=query,
+                status="FOUND",
+                program_id=results[0].id
+            )
+        else:
+            # Nếu mảng rỗng (không tìm thấy lệnh nào)
+            history_data = HistoryCreate(
+                command_text=query,
+                status="NOT_FOUND",
+                program_id=None
+            )
+            
+        # Gọi hàm tạo lịch sử (truyền ID của người dùng đang đăng nhập)
+        create_history(db=db, history_in=history_data, user_id=current_user.id)
+    
+    # 3. Trả về kết quả tìm kiếm cho Frontend như bình thường (Dù là Khách hay User)
+    return results
+
+# Import ExplainResponse từ schemas
+from app.schemas.program import ExplainResponse
+
+@router.get("/explain", response_model=ExplainResponse)
+def explain_command_api(
+    query: str, # VD: query="ps -aux"
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+) -> Any:
+    """
+    API Phân tích và Giải thích toàn bộ một câu lệnh.
+    """
+    # 1. Gọi hàm parser
+    result = explain_command(db, full_command=query)
+    
+    # 2. Xử lý lưu lịch sử
+    if current_user:
+        if result:
+            history_data = HistoryCreate(
+                command_text=query,
+                status="FOUND",
+                program_id=result["program"].id
+            )
+        else:
+            history_data = HistoryCreate(
+                command_text=query,
+                status="NOT_FOUND",
+                program_id=None
+            )
+        create_history(db=db, history_in=history_data, user_id=current_user.id)
+
+    # 3. Trả về lỗi nếu không tìm thấy lệnh
+    if not result:
+        # Lấy từ đầu tiên báo lỗi cho thân thiện
+        cmd_name = query.strip().split()[0] if query.strip() else "Lệnh rỗng"
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Lệnh '{cmd_name}' chưa có trong cơ sở dữ liệu."
+        )
+
+    return result
 
 @router.get("/{id}/details", response_model=ProgramDetail)
 def read_program_details_api(

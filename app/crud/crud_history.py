@@ -4,10 +4,9 @@ from sqlalchemy import func
 from app.models.history import History
 from app.schemas.history import HistoryCreate
 
-# ==========================================
-# 1. CÁC HÀM ĐỌC DỮ LIỆU (READ)
-# ==========================================
-
+# # ==========================================
+# # 1. CÁC HÀM ĐỌC DỮ LIỆU (READ)
+# # ==========================================
 def get_history(db: Session, history_id: int) -> Optional[History]:
     """Lấy thông tin một bản ghi lịch sử cụ thể"""
     return db.query(History).filter(History.id == history_id).first()
@@ -48,11 +47,10 @@ def get_unique_recent_histories_by_user(db: Session, user_id: int, limit: int = 
             (History.command_text == subquery.c.command_text) &
             (History.created_at == subquery.c.latest_time)
         )
-        .order_by(History.created_at.desc()) # Sắp xếp mới nhất lên đầu
-        .limit(limit) # Chỉ lấy đúng 10 dòng
+        .order_by(History.created_at.desc())
+        .limit(limit)
         .all()
     )
-    
     return results
 
 def get_all_histories(db: Session, skip: int = 0, limit: int = 100) -> List[History]:
@@ -63,14 +61,12 @@ def get_all_histories(db: Session, skip: int = 0, limit: int = 100) -> List[Hist
              .order_by(History.created_at.desc())\
              .offset(skip).limit(limit).all()
 
-
-# ==========================================
-# 2. CÁC HÀM GHI & XÓA DỮ LIỆU (CREATE, DELETE)
-# ==========================================
-
-def create_history(db: Session, user_id: int, history_in: HistoryCreate) -> History:
+# # =============================================
+# # 2. CÁC HÀM GHI & XÓA DỮ LIỆU (CREATE, DELETE)
+# # =============================================
+def create_history(db: Session, history_in: HistoryCreate, user_id: Optional[int] = None) -> History:
     """Lưu lại một lượt tra cứu của người dùng vào Database"""
-    db_history = History(**history_in.dict(), user_id=user_id)
+    db_history = History(**history_in.model_dump(), user_id=user_id)
     db.add(db_history)
     db.commit()
     db.refresh(db_history)
@@ -92,3 +88,4 @@ def clear_user_history(db: Session, user_id: int) -> int:
     deleted_count = db.query(History).filter(History.user_id == user_id).delete()
     db.commit()
     return deleted_count
+

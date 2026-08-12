@@ -12,6 +12,7 @@ from app.models.option import Option # noqa
 from app.models.note import Note #noqa
 from app.models.example import Example # noqa
 from app.models.man_page import ManPage # noqa
+from app.models.os_distribution import OSDistribution # noqua
 from app.models.history import History # noqa 
 from app.models.favorite import Favorite # noqa
 

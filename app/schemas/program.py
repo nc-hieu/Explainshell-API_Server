@@ -10,6 +10,7 @@ from app.schemas.option_group import OptionGroup
 from app.schemas.option import Option
 from app.schemas.note import Note
 from app.schemas.example import Example
+from app.schemas.man_page import ManPage
 
 # ==========================================
 # THÊM SCHEMA RÚT GỌN NÀY LÊN ĐẦU HOẶC GIỮA FILE
@@ -75,8 +76,9 @@ class Program(ProgramBase):
     class Config:
         from_attributes = True # Bắt buộc có để Pydantic dịch được object SQLAlchemy
 
+
 # ==========================================
-# SCHEMA RÚT GỌN CHO DANH SÁCH (Tối ưu băng thông)
+# SCHEMA RÚT GỌN CHO DANH SÁCH
 # ==========================================
 class ProgramShort(BaseModel):
     """Schema siêu nhẹ chỉ trả về các trường cần thiết để vẽ danh sách"""
@@ -90,7 +92,7 @@ class ProgramShort(BaseModel):
 
 class ProgramDetail(Program):
     """
-    Schema "Tối thượng": Dùng cho API chi tiết (GET /{id}/details).
+    Schema dùng cho API chi tiết (GET /{id}/details).
     Trả về Program kèm theo toàn bộ "họ hàng" của nó.
     """
     categories: List[Category] = []
@@ -98,8 +100,7 @@ class ProgramDetail(Program):
     options: List[Option] = []
     notes: List[Note] = []
     examples: List[Example] = []
-    
-    # man_pages: List[ManPage] = [] # Nếu bạn đã tạo schema ManPage thì bỏ comment dòng này
+    man_pages: List[ManPage] = []
 
     class Config:
         from_attributes = True
@@ -114,3 +115,17 @@ class BulkProgramCategoryUpdate(BaseModel):
     """Schema dùng để cập nhật danh mục cho NHIỀU lệnh cùng lúc"""
     program_ids: List[int] = []  # Danh sách các lệnh cần sửa (VD: [1, 2, 3])
     category_ids: List[int] = [] # Danh sách danh mục mới sẽ áp dụng (VD: [4, 5])
+from app.schemas.option import Option
+
+
+# ==========================================
+# SCHEMA DÙNG KHI TRẢ VỀ (Search)
+# ==========================================
+class ExplainResponse(BaseModel):
+    """Schema trả về cho tính năng Giải thích lệnh (Explain)"""
+    program: ProgramShort         # Dùng ProgramShort cho nhẹ
+    matched_options: List[Option] # Danh sách các cờ lệnh tìm thấy
+    unmatched_args: List[str]     # Các tham số dư thừa (VD: tên file, đường dẫn) để FE có thể highlight màu xám
+
+    class Config:
+        from_attributes = True

@@ -16,7 +16,10 @@ def get_options_by_program(db: Session, program_id: int) -> List[Option]:
     Lấy danh sách tất cả các cờ lệnh của một Câu lệnh (Program).
     Có thể dùng để liệt kê danh sách cờ lệnh cho người dùng xem.
     """
-    return db.query(Option).filter(Option.program_id == program_id).all()
+    return db.query(Option)\
+             .filter(Option.program_id == program_id)\
+             .order_by(Option.id.asc())\
+             .all()
 
 
 # ==========================================

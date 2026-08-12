@@ -1,19 +1,27 @@
-from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+
+# Import class Base của hệ thống
 from app.db.session import Base
 
 class History(Base):
     __tablename__ = "histories"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    # Khóa ngoại
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=True)
+    program_id = Column(Integer, ForeignKey("programs.id", ondelete="SET NULL"), index=True, nullable=True)
+    
     command_text = Column(Text, nullable=False)
-    explanation = Column(Text)
+    status = Column(String(20), nullable=False, default="FOUND")
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    created_at = Column(DateTime, server_default=func.now())
-
-    # Quan hệ N-1: Nhiều lịch sử thuộc về 1 người dùng
+    # Quan hệ
     user = relationship("User", back_populates="histories")
+    program = relationship("Program", back_populates="histories")
 
     def __repr__(self):
         return f"<History(user_id={self.user_id}, query='{self.command_text[:20]}...')>"

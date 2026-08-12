@@ -19,7 +19,7 @@ def get_notes_by_program(db: Session, program_id: int) -> List[Note]:
     """
     return db.query(Note)\
              .filter(Note.program_id == program_id)\
-             .order_by(Note.created_at.desc())\
+             .order_by(Note.created_at.asc())\
              .all()
 
 # ==========================================

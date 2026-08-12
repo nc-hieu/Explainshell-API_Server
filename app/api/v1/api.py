@@ -11,7 +11,8 @@ from app.api.v1.endpoints import (
     notes,
     favorites,
     examples,
-    man_pages
+    man_pages,
+    os_distributions
 )
 
 api_router = APIRouter()
@@ -31,3 +32,4 @@ api_router.include_router(options.router, prefix="/options", tags=["Options"])
 api_router.include_router(notes.router, prefix="/notes", tags=["Notes"])
 api_router.include_router(examples.router, prefix="/examples", tags=["Examples"])
 api_router.include_router(man_pages.router, prefix="/man-pages", tags=["Man Pages"])
+api_router.include_router(os_distributions.router, prefix="/os-distributions", tags=["OS Distributions"])

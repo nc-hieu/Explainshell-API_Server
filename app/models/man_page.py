@@ -1,25 +1,23 @@
-from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey, func, String
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy import Column, Integer, Text, String, ForeignKey, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from app.db.session import Base
 
 class ManPage(Base):
     __tablename__ = "man_pages"
 
     id = Column(Integer, primary_key=True, index=True)
-    # Quan hệ 1 - N: Mỗi chương trình nhiều trang man
-    program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False)
-    section = Column(Integer)
-    content = Column(Text, nullable=False)
-    source_url = Column(String(255))
-
-    # Vector tìm kiếm cho toàn bộ nội dung man page
-    fts_doc_vector = Column(TSVECTOR)
+    program_id = Column(Integer, ForeignKey("programs.id", ondelete="CASCADE"), nullable=False, index=True)
+    os_id = Column(Integer, ForeignKey("os_distributions.id", ondelete="SET NULL"), index=True)
     
-    updated_at = Column(DateTime, server_default=func.now())
+    section = Column(Integer)
+    content = Column(Text)
+    source_url = Column(String(255))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    fts_doc_vector = Column(TSVECTOR)
 
-    # Quan hệ ngược lại với Program
+    # Quan hệ
     program = relationship("Program", back_populates="man_pages")
-
-    def __repr__(self):
-        return f"<ManPage(program_id={self.program_id})>"
+    os = relationship("OSDistribution", back_populates="man_pages")
