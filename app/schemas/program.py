@@ -133,6 +133,7 @@ from app.schemas.option import Option
 class ParsedProgram(BaseModel):
     id: Optional[int] = None
     name: str
+    slug: Optional[str] = None
     description: Optional[str] = None
     is_found: bool # Cờ quan trọng cho Frontend
 

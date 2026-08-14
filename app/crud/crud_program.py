@@ -132,6 +132,7 @@ def explain_command(db: Session, full_command: str):
         program_info = {
             "id": program.id if program else None,
             "name": program_name,
+            "slug": program.slug if program else None,
             "description": program.description if program else None,
             "is_found": bool(program)
         }
@@ -183,7 +184,6 @@ def explain_command(db: Session, full_command: str):
                 else:
                     # Các chuỗi text, đường dẫn, hoặc chuỗi trong ngoặc kép ("cd /; ...")
                     unmatched.append(arg)
-
         results.append({
             "program": program_info,
             "matched_options": parsed_options_info,
