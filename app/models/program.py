@@ -44,7 +44,7 @@ class Program(Base):
     examples = relationship("Example", back_populates="program", cascade="all, delete-orphan")
     
     # 6. Quan hệ với Histories
-    histories = relationship("History", back_populates="program")
+    histories = relationship("History", secondary="history_programs", back_populates="programs")
 
     # 7. Quan hệ với Man Page (1 Program có nhiều Sections trong Man Page)
     man_pages = relationship("ManPage", back_populates="program", cascade="all, delete-orphan")

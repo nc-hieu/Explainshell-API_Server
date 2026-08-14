@@ -1,6 +1,8 @@
 from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
+from app.schemas.program import ProgramShort
 
 # ==========================================
 # 1. SCHEMA CƠ BẢN (Dùng chung)
@@ -8,7 +10,6 @@ from pydantic import BaseModel
 class HistoryBase(BaseModel):
     command_text: str
     status: Optional[str] = "FOUND"
-    program_id: Optional[int] = None
 
 # ==========================================
 # 2. SCHEMA GHI DỮ LIỆU (Request)
@@ -18,7 +19,7 @@ class HistoryCreate(HistoryBase):
     Schema dùng khi tạo lịch sử mới (Mỗi khi user search trên web).
     (user_id sẽ được lấy tự động từ hệ thống Auth, không bắt user truyền lên)
     """
-    pass
+    program_ids: List[int] = []
 # LƯU Ý: Không có HistoryUpdate vì lịch sử đã tạo ra thì không nên sửa chữa
 
 # ==========================================
@@ -29,6 +30,8 @@ class History(HistoryBase):
     id: int
     user_id: Optional[int] = None
     created_at: datetime
+    # Trả về danh sách các lệnh liên quan (VD: [{name: "tar", ...}, {name: "ssh", ...}])
+    programs: List[ProgramShort] = []
 
     class Config:
         from_attributes = True # Dùng cho Pydantic V2

@@ -1,33 +1,33 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from app.models.history import History
+from app.models.program import Program
 from app.schemas.history import HistoryCreate
 
 # # ==========================================
 # # 1. CÁC HÀM ĐỌC DỮ LIỆU (READ)
 # # ==========================================
 def get_history(db: Session, history_id: int) -> Optional[History]:
-    """Lấy thông tin một bản ghi lịch sử cụ thể"""
-    return db.query(History).filter(History.id == history_id).first()
+    """Lấy thông tin một bản ghi lịch sử cụ thể (Load kèm danh sách lệnh)"""
+    return db.query(History)\
+             .options(selectinload(History.programs))\
+             .filter(History.id == history_id).first()
 
 def get_histories_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 50) -> List[History]:
     """
     Lấy danh sách lịch sử của MỘT người dùng cụ thể.
-    Luôn sắp xếp theo thời gian mới nhất (created_at DESC).
     """
     return db.query(History)\
+             .options(selectinload(History.programs)) \
              .filter(History.user_id == user_id)\
              .order_by(History.created_at.desc())\
              .offset(skip).limit(limit).all()
 
 def get_unique_recent_histories_by_user(db: Session, user_id: int, limit: int = 10) -> List[History]:
     """
-    Lấy danh sách lịch sử của người dùng (Không trùng lặp command_text, lấy thời gian mới nhất).
-    Dùng Subquery để tối ưu hiệu năng Database.
+    Lấy danh sách lịch sử (Không trùng lặp).
     """
-    # Bước 1: Tạo một bảng ảo (subquery) gom nhóm theo command_text
-    # và tìm ra thời gian tra cứu gần nhất (MAX created_at) của từng lệnh đó.
     subquery = (
         db.query(
             History.command_text,
@@ -38,10 +38,9 @@ def get_unique_recent_histories_by_user(db: Session, user_id: int, limit: int = 
         .subquery()
     )
 
-    # Bước 2: Join bảng History gốc với cái bảng ảo vừa tạo
-    # Chỉ lấy những bản ghi nào có thời gian khớp chính xác với latest_time
     results = (
         db.query(History)
+        .options(selectinload(History.programs)) 
         .join(
             subquery,
             (History.command_text == subquery.c.command_text) &
@@ -65,11 +64,28 @@ def get_all_histories(db: Session, skip: int = 0, limit: int = 100) -> List[Hist
 # # 2. CÁC HÀM GHI & XÓA DỮ LIỆU (CREATE, DELETE)
 # # =============================================
 def create_history(db: Session, history_in: HistoryCreate, user_id: Optional[int] = None) -> History:
-    """Lưu lại một lượt tra cứu của người dùng vào Database"""
-    db_history = History(**history_in.model_dump(), user_id=user_id)
+    """
+    Tạo lịch sử mới và tự động lưu các liên kết vào bảng trung gian history_programs.
+    """
+    # 1. Tạo object History (chưa lưu vào DB)
+    db_history = History(
+        command_text=history_in.command_text,
+        status=history_in.status,
+        user_id=user_id
+    )
+    
+    # 2. Xử lý lưu các Program liên quan vào bảng trung gian
+    if history_in.program_ids:
+        # Lấy danh sách các object Program từ database
+        programs_found = db.query(Program).filter(Program.id.in_(history_in.program_ids)).all()
+        # SQLAlchemy sẽ tự động insert vào bảng history_programs khi gán mảng này
+        db_history.programs = programs_found
+
+    # 3. Lưu toàn bộ xuống DB
     db.add(db_history)
     db.commit()
     db.refresh(db_history)
+    
     return db_history
 
 def delete_history(db: Session, history_id: int) -> Optional[History]:

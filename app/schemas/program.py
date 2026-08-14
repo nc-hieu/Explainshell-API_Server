@@ -119,13 +119,32 @@ from app.schemas.option import Option
 
 
 # ==========================================
-# SCHEMA DÙNG KHI TRẢ VỀ (Search)
+# SCHEMA DÙNG KHI TRẢ VỀ (ExplainShell)
 # ==========================================
-class ExplainResponse(BaseModel):
-    """Schema trả về cho tính năng Giải thích lệnh (Explain)"""
-    program: ProgramShort         # Dùng ProgramShort cho nhẹ
-    matched_options: List[Option] # Danh sách các cờ lệnh tìm thấy
-    unmatched_args: List[str]     # Các tham số dư thừa (VD: tên file, đường dẫn) để FE có thể highlight màu xám
+# class ExplainResponse(BaseModel):
+#     """Schema trả về cho tính năng Giải thích lệnh (Explain)"""
+#     program: ProgramShort         # Dùng ProgramShort cho nhẹ
+#     matched_options: List[Option] # Danh sách các cờ lệnh tìm thấy
+#     unmatched_args: List[str]     # Các tham số dư thừa (VD: tên file, đường dẫn) để FE có thể highlight màu xám
 
-    class Config:
-        from_attributes = True
+#     class Config:
+#         from_attributes = True
+
+class ParsedProgram(BaseModel):
+    id: Optional[int] = None
+    name: str
+    description: Optional[str] = None
+    is_found: bool # Cờ quan trọng cho Frontend
+
+class ParsedOption(BaseModel):
+    id: Optional[int] = None
+    original_text: str # Text người dùng nhập (VD: "-a")
+    short_name: Optional[str] = None
+    long_name: Optional[str] = None
+    description: Optional[str] = None
+    is_found: bool # Báo cho Frontend biết có cờ này trong DB không
+
+class ExplainResponse(BaseModel):
+    program: ParsedProgram
+    matched_options: List[ParsedOption]
+    unmatched_args: List[str] # Dành cho các tham số như "some-dir", "some-server", chuỗi trong ngoặc kép

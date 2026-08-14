@@ -1,3 +1,4 @@
+import shlex
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 from app.models.program import Program
@@ -38,7 +39,7 @@ def get_program_by_slug(db: Session, slug: str):
     return db.query(Program).filter(Program.slug == slug).options(selectinload(Program.categories)).first()
 
 
-def get_program_by_slug(db: Session, slug: str):
+def get_program_details_by_slug(db: Session, slug: str):
     """
     Lấy chi tiết 1 lệnh dựa vào Slug và sắp xếp options theo id tăng dần bằng Python.
     """
@@ -84,58 +85,112 @@ def search_programs(db: Session, query: str):
 
 def explain_command(db: Session, full_command: str):
     """
-    Thuật toán phân tích cú pháp (Parser) và giải thích lệnh.
+    Thuật toán phân tích cú pháp (Parser) hỗ trợ toán tử shell và cờ is_found.
     """
-    # 1. Tách chuỗi thành mảng bằng khoảng trắng
-    parts = full_command.strip().split()
-    if not parts:
-        return None
-        
-    # Từ đầu tiên luôn là tên lệnh (VD: "ps", "tar")
-    program_name = parts[0].lower()
-    args = parts[1:]
+    if not full_command or not full_command.strip():
+        return []
 
-    # 2. Tìm kiếm lệnh trong DB
-    program = db.query(Program).filter(Program.name == program_name).first()
-    if not program:
-        return None
+    # 1. Tách chuỗi. shlex sẽ giữ nguyên chuỗi trong ngoặc kép "cd /; tar..."
+    try:
+        tokens = shlex.split(full_command)
+    except ValueError:
+        tokens = full_command.strip().split()
 
-    # 3. Phân tích các đối số (args)
-    parsed_short_flags = []
-    parsed_long_flags = []
-    unmatched = []
+    # 2. Xử lý các toán tử shell
+    shell_operators = ['|', ';', '&&', '||', '>', '>>', '<']
+    commands_list = []
+    current_command = []
 
-    for arg in args:
-        if arg.startswith('--'):
-            # Là cờ dài (VD: --help)
-            parsed_long_flags.append(arg)
-        elif arg.startswith('-') and len(arg) > 1:
-            # Là cờ ngắn gộp (VD: -aux). Bóc tách thành -a, -u, -x
-            for char in arg[1:]:
-                parsed_short_flags.append(f"-{char}")
-        elif program_name in ['ps', 'tar'] and not arg.startswith('-') and not '/' in arg and not '.' in arg:
-            # XỬ LÝ ĐẶC BIỆT cho ps, tar (BSD style): Người dùng gõ "aux" thay vì "-aux"
-            # Ta tự động bóc tách và thêm dấu gạch ngang vào để khớp với DB
-            for char in arg:
-                parsed_short_flags.append(f"-{char}")
+    for token in tokens:
+        if token in shell_operators:
+            # Lưu lệnh trước đó (nếu có)
+            if current_command:
+                commands_list.append(current_command)
+                current_command = []
+            # Lưu bản thân toán tử như một lệnh ĐỘC LẬP để giải thích
+            commands_list.append([token])
         else:
-            # Các thành phần không phải cờ lệnh (Tên file, text thường...)
-            unmatched.append(arg)
+            current_command.append(token)
+            
+    if current_command:
+        commands_list.append(current_command)
 
-    # 4. Tìm kiếm các Option trong DB khớp với các cờ đã tách
-    matched_options = []
-    if parsed_short_flags or parsed_long_flags:
-        matched_options = db.query(Option).filter(
-            Option.program_id == program.id,
-            (Option.short_name.in_(parsed_short_flags)) | (Option.long_name.in_(parsed_long_flags))
-        ).all()
+    results = []
 
-    # 5. Trả về kết quả
-    return {
-        "program": program,
-        "matched_options": matched_options,
-        "unmatched_args": unmatched
-    }
+    # 3. Phân tích từng cụm lệnh
+    for cmd_parts in commands_list:
+        if not cmd_parts:
+            continue
+            
+        program_name = cmd_parts[0]
+        args = cmd_parts[1:]
+
+        # Truy vấn Program bằng ilike (không phân biệt hoa/thường)
+        program = db.query(Program).filter(Program.name.ilike(program_name)).first()
+        
+        # Đóng gói thông tin Program kèm cờ is_found
+        program_info = {
+            "id": program.id if program else None,
+            "name": program_name,
+            "description": program.description if program else None,
+            "is_found": bool(program)
+        }
+
+        parsed_options_info = []
+        unmatched = []
+
+        # Chỉ phân tích args nếu đây không phải là một toán tử shell
+        if program_name not in shell_operators:
+            short_opt_map = {}
+            long_opt_map = {}
+
+            if program:
+                all_options = db.query(Option).filter(Option.program_id == program.id).all()
+                for opt in all_options:
+                    if opt.short_name:
+                        short_opt_map[opt.short_name] = opt
+                    if opt.long_name:
+                        long_opt_map[opt.long_name] = opt
+
+            # Helper function để đóng gói Option trả về đầy đủ ID và Name
+            def append_option(text_entered, matched_opt):
+                parsed_options_info.append({
+                    "id": matched_opt.id if matched_opt else None,
+                    "original_text": text_entered,
+                    "short_name": matched_opt.short_name if matched_opt else None,
+                    "long_name": matched_opt.long_name if matched_opt else None,
+                    "description": matched_opt.description if matched_opt else None,
+                    "is_found": bool(matched_opt)
+            })
+
+            for arg in args:
+                if arg.startswith('--'):
+                    # Tìm cờ dài
+                    opt = long_opt_map.get(arg)
+                    append_option(arg, opt)
+                elif arg.startswith('-') and len(arg) > 1:
+                    # Bóc tách cờ ngắn gộp (VD: -zcf thành -z, -c, -f)
+                    for char in arg[1:]:
+                        flag = f"-{char}"
+                        opt = short_opt_map.get(flag)
+                        append_option(flag, opt)
+                elif program and program.name.lower() in ['ps', 'tar'] and not arg.startswith('-') and '/' not in arg and '.' not in arg:
+                    # Xử lý lệnh dạng BSD (VD: tar zcf)
+                    for char in arg:
+                        flag = f"-{char}"
+                        opt = short_opt_map.get(flag)
+                        append_option(char, opt)
+                else:
+                    # Các chuỗi text, đường dẫn, hoặc chuỗi trong ngoặc kép ("cd /; ...")
+                    unmatched.append(arg)
+
+        results.append({
+            "program": program_info,
+            "matched_options": parsed_options_info,
+            "unmatched_args": unmatched
+        })
+
+    return results
 
 
 def get_programs_by_category_slug(db: Session, category_slug: str) -> List[Program]:
@@ -198,7 +253,7 @@ def create_program(db: Session, program_in: ProgramCreate):
     """Tạo lệnh mới, có xử lý tự động gán Danh mục (Categories)"""
     
     # 1. Tách category_ids ra khỏi dữ liệu chính (vì bảng Program không có cột này)
-    program_data = program_in.dict(exclude={"category_ids"})
+    program_data = program_in.model_dump(exclude={"category_ids"})
     db_program = Program(**program_data)
     
     # 2. Xử lý gán danh mục nếu người dùng có gửi lên
@@ -218,7 +273,7 @@ def update_program(db: Session, program_id: int, program_in: ProgramUpdate):
     if not db_program:
         return None
 
-    update_data = program_in.dict(exclude_unset=True) # Chỉ lấy những trường được gửi lên
+    update_data = program_in.model_dump(exclude_unset=True) # Chỉ lấy những trường được gửi lên
     
     # Xử lý cập nhật danh mục riêng biệt
     if "category_ids" in update_data:

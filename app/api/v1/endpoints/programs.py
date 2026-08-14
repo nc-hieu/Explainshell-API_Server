@@ -9,7 +9,7 @@ from app.crud.crud_program import (
     get_program_by_name, 
     get_program_by_slug,
     get_program_details, 
-    get_program_by_slug,
+    get_program_details_by_slug,
     get_programs_by_category_slug,
     get_programs_by_topic_slug,
     search_programs, 
@@ -84,14 +84,14 @@ def search_programs_api(
             history_data = HistoryCreate(
                 command_text=query,
                 status="FOUND",
-                program_id=results[0].id
+                program_ids=[results[0].id]
             )
         else:
             # Nếu mảng rỗng (không tìm thấy lệnh nào)
             history_data = HistoryCreate(
                 command_text=query,
                 status="NOT_FOUND",
-                program_id=None
+                program_ids=[]
             )
             
         # Gọi hàm tạo lịch sử (truyền ID của người dùng đang đăng nhập)
@@ -103,43 +103,56 @@ def search_programs_api(
 # Import ExplainResponse từ schemas
 from app.schemas.program import ExplainResponse
 
-@router.get("/explain", response_model=ExplainResponse)
+@router.get("/explain", response_model=List[ExplainResponse])
 def explain_command_api(
-    query: str, # VD: query="ps -aux"
+    query: str, 
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ) -> Any:
     """
     API Phân tích và Giải thích toàn bộ một câu lệnh.
     """
-    # 1. Gọi hàm parser
+    # 1. Gọi hàm parser (result bây giờ là một List các object)
     result = explain_command(db, full_command=query)
     
     # 2. Xử lý lưu lịch sử
     if current_user:
-        if result:
+        if result and len(result) > 0:
+            # Thu thập tất cả các ID của các lệnh tìm thấy trong chuỗi
+            found_ids = [
+                item["program"]["id"] 
+                for item in result 
+                if item["program"]["is_found"] and item["program"]["id"] is not None
+            ]
+
+            total_commands = len(result)
+            found_count = len(found_ids)
+            
+            # ĐÁNH GIÁ TRẠNG THÁI (STATUS LOGIC)
+            if found_count == total_commands:
+                overall_status = "FOUND"
+            elif found_count == 0:
+                overall_status = "NOT_FOUND"
+            else:
+                overall_status = "PARTIAL"
+            
             history_data = HistoryCreate(
                 command_text=query,
-                status="FOUND",
-                program_id=result["program"].id
+                status=overall_status,
+                program_ids=found_ids
             )
         else:
             history_data = HistoryCreate(
                 command_text=query,
                 status="NOT_FOUND",
-                program_id=None
+                program_ids=[]
             )
+            
         create_history(db=db, history_in=history_data, user_id=current_user.id)
 
-    # 3. Trả về lỗi nếu không tìm thấy lệnh
-    if not result:
-        # Lấy từ đầu tiên báo lỗi cho thân thiện
-        cmd_name = query.strip().split()[0] if query.strip() else "Lệnh rỗng"
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Lệnh '{cmd_name}' chưa có trong cơ sở dữ liệu."
-        )
-
+    # 3. Trả về kết quả trực tiếp cho Frontend
+    # Đã bỏ phần raise HTTPException 404 để Frontend tự xử lý giao diện hiển thị 
+    # các từ khóa không tìm thấy thông qua cờ `is_found = False`.
     return result
 
 @router.get("/{id}/details", response_model=ProgramDetail)
@@ -163,7 +176,7 @@ def read_program_details_by_slug_api(
     db: Session = Depends(get_db)
 ) -> Any:
     """Lấy thông tin một câu lệnh theo Slug (URL SEO)"""
-    program = get_program_by_slug(db, slug=slug)
+    program = get_program_details_by_slug(db, slug=slug)
     if not program:
         raise HTTPException(status_code=404, detail="Không tìm thấy câu lệnh này.")
     return program
