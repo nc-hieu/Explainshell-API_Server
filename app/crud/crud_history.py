@@ -21,7 +21,7 @@ def get_histories_by_user(db: Session, user_id: int, skip: int = 0, limit: int =
     return db.query(History)\
              .options(selectinload(History.programs)) \
              .filter(History.user_id == user_id)\
-             .order_by(History.created_at.desc())\
+             .order_by(History.created_at.asc())\
              .offset(skip).limit(limit).all()
 
 def get_unique_recent_histories_by_user(db: Session, user_id: int, limit: int = 10) -> List[History]:

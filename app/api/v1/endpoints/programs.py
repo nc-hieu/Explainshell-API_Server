@@ -4,18 +4,18 @@ from sqlalchemy.orm import Session
 
 # Import các hàm xử lý logic từ CRUD
 from app.crud.crud_program import (
-    get_programs, 
-    get_program, 
-    get_program_by_name, 
+    get_programs,
+    get_program,
+    get_program_by_name,
     get_program_by_slug,
-    get_program_details, 
+    get_program_details,
     get_program_details_by_slug,
     get_programs_by_category_slug,
     get_programs_by_topic_slug,
-    search_programs, 
+    search_programs,
     explain_command,
-    create_program, 
-    update_program, 
+    create_program,
+    update_program,
     delete_program
 )
 
@@ -31,6 +31,9 @@ from app.schemas.program import (
 )
 
 from app.schemas.history import HistoryCreate
+
+# Import ExplainResponse từ schemas
+from app.schemas.program import ExplainResponse
 
 # Import DB session và Dependency xác thực
 from app.db.session import get_db
@@ -100,8 +103,6 @@ def search_programs_api(
     # 3. Trả về kết quả tìm kiếm cho Frontend như bình thường (Dù là Khách hay User)
     return results
 
-# Import ExplainResponse từ schemas
-from app.schemas.program import ExplainResponse
 
 @router.get("/explain", response_model=List[ExplainResponse])
 def explain_command_api(
@@ -127,7 +128,7 @@ def explain_command_api(
 
             total_commands = len(result)
             found_count = len(found_ids)
-            
+
             # ĐÁNH GIÁ TRẠNG THÁI (STATUS LOGIC)
             if found_count == total_commands:
                 overall_status = "FOUND"
@@ -179,6 +180,9 @@ def read_program_details_by_slug_api(
     program = get_program_details_by_slug(db, slug=slug)
     if not program:
         raise HTTPException(status_code=404, detail="Không tìm thấy câu lệnh này.")
+    # Sắp xếp options theo id tại đây để tránh thay đổi trạng thái ORM trong session
+    if program.options:
+        program.options = sorted(program.options, key=lambda opt: opt.id)
     return program
 
 @router.get("/{id}", response_model=ProgramSchema)

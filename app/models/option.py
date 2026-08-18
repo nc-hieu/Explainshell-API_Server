@@ -16,11 +16,12 @@ class Option(Base):
     long_name = Column(String(50)) 
     description = Column(Text, nullable=False) 
     
-    is_deprecated = Column(Boolean, default=False) 
+    is_deprecated = Column(Boolean, default=False)
     is_featured = Column(Boolean, default=False)
-    
-    # Cột vector tìm kiếm nâng cao 
-    fts_option_vector = Column(TSVECTOR) 
+    takes_value = Column(Boolean, default=False)
+
+    # Cột vector tìm kiếm nâng cao
+    fts_option_vector = Column(TSVECTOR)
 
     # Đảm bảo tính duy nhất: Một lệnh không thể có 2 option trùng cả tên ngắn và dài 
     __table_args__ = (

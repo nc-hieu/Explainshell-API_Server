@@ -11,6 +11,7 @@ class OptionBase(BaseModel):
     description: str                      # Mô tả chi tiết chức năng của cờ lệnh
     is_deprecated: bool = False           # Đánh dấu cờ lệnh này đã lỗi thời hay chưa
     is_featured: bool = False             # Đánh dấu cờ lệnh nổi bật
+    takes_value: bool = False             # Đánh dấu cờ lệnh nhận giá trị (VD: -f file, -p 2222)
     group_id: Optional[int] = None        # ID của nhóm cờ lệnh (Có thể null)
 
 
@@ -31,6 +32,7 @@ class OptionUpdate(BaseModel):
     description: Optional[str] = None
     is_deprecated: Optional[bool] = None
     is_featured: Optional[bool] = None
+    takes_value: Optional[bool] = None
     group_id: Optional[int] = None
 
 

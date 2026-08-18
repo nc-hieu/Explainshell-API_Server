@@ -144,8 +144,10 @@ class ParsedOption(BaseModel):
     long_name: Optional[str] = None
     description: Optional[str] = None
     is_found: bool # Báo cho Frontend biết có cờ này trong DB không
+    value: Optional[str] = None # Giá trị dính liền hoặc từ arg tiếp theo (VD: -p2222 → "2222")
 
 class ExplainResponse(BaseModel):
+    type: str = "command" # command | operator | redirect_target
     program: ParsedProgram
     matched_options: List[ParsedOption]
     unmatched_args: List[str] # Dành cho các tham số như "some-dir", "some-server", chuỗi trong ngoặc kép
