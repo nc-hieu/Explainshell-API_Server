@@ -1,10 +1,11 @@
-from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, List, Optional
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 # Import CRUD và Schemas
 from app.crud import crud_history
-from app.schemas.history import History, HistoryCreate
+from app.schemas.history import History, HistoryCreate, HistoryStatus, HistoryStatusSummary
 
 # Import DB và Dependency bảo mật
 from app.db.session import get_db
@@ -100,3 +101,62 @@ def read_all_histories(
 ) -> Any:
     """Lấy toàn bộ lịch sử của hệ thống (Dành cho Admin theo dõi)"""
     return crud_history.get_all_histories(db=db, skip=skip, limit=limit)
+
+
+@router.get("/by-status", response_model=List[History])
+def read_histories_by_status(
+    status: HistoryStatus,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+    skip: int = 0,
+    limit: int = Query(50, ge=1, le=100),
+    sort_by: str = Query("created_at", regex="^(created_at|command_text|status)$"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+) -> Any:
+    """
+    [ADMIN] Lấy danh sách lịch sử theo trạng thái (FOUND, PARTIAL, NOT_FOUND).
+    Hỗ trợ lọc theo khoảng thời gian, sắp xếp và phân trang.
+    """
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="from_date không được lớn hơn to_date."
+        )
+
+    return crud_history.get_histories_by_status(
+        db=db,
+        status=status.value,
+        from_date=from_date,
+        to_date=to_date,
+        skip=skip,
+        limit=limit,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+
+
+@router.get("/status-summary", response_model=HistoryStatusSummary)
+def read_history_status_summary(
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user)
+) -> Any:
+    """
+    [ADMIN] Thống kê tổng số bản ghi lịch sử theo từng trạng thái.
+    Có thể lọc theo khoảng thời gian.
+    """
+    if from_date and to_date and from_date > to_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="from_date không được lớn hơn to_date."
+        )
+
+    summary = crud_history.get_history_status_summary(
+        db=db,
+        from_date=from_date,
+        to_date=to_date
+    )
+    return summary

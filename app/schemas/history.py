@@ -1,8 +1,22 @@
-from typing import Optional
+from enum import Enum
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 from app.schemas.program import ProgramShort
+
+# ==========================================
+# 0. ENUM VÀ SCHEMA HỖ TRỢ
+# ==========================================
+class HistoryStatus(str, Enum):
+    FOUND = "FOUND"
+    PARTIAL = "PARTIAL"
+    NOT_FOUND = "NOT_FOUND"
+
+class HistoryStatusSummary(BaseModel):
+    FOUND: int = 0
+    PARTIAL: int = 0
+    NOT_FOUND: int = 0
+    TOTAL: int = 0
 
 # ==========================================
 # 1. SCHEMA CƠ BẢN (Dùng chung)
