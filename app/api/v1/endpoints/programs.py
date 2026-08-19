@@ -19,8 +19,6 @@ from app.crud.crud_program import (
     delete_program
 )
 
-from app.crud.crud_history import create_history 
-
 # Import các định dạng dữ liệu từ Schemas
 from app.schemas.program import (
     Program as ProgramSchema, 
@@ -75,32 +73,28 @@ def search_programs_api(
 ) -> Any:
     """
     Tìm kiếm lệnh siêu tốc bằng Full-text Search.
-    Chỉ lưu lịch sử tìm kiếm NẾU người dùng đã đăng nhập.
     """
     # 1. Gọi hàm search tìm kết quả
     results = search_programs(db, query=query)
-    
-    # 2. KIỂM TRA ĐĂNG NHẬP ĐỂ LƯU LỊCH SỬ
-    if current_user:
-        # Nếu có kết quả (len > 0), lấy ID của lệnh đầu tiên làm đại diện
-        if results and len(results) > 0:
-            history_data = HistoryCreate(
-                command_text=query,
-                status="FOUND",
-                program_ids=[results[0].id]
-            )
-        else:
-            # Nếu mảng rỗng (không tìm thấy lệnh nào)
-            history_data = HistoryCreate(
-                command_text=query,
-                status="NOT_FOUND",
-                program_ids=[]
-            )
-            
-        # Gọi hàm tạo lịch sử (truyền ID của người dùng đang đăng nhập)
-        create_history(db=db, history_in=history_data, user_id=current_user.id)
-    
-    # 3. Trả về kết quả tìm kiếm cho Frontend như bình thường (Dù là Khách hay User)
+
+    # [TẠM THỜI TẮT] Lưu lịch sử tìm kiếm đã được chuyển sang Frontend.
+    # Nếu cần bật lại logic cũ, uncomment đoạn code dưới đây:
+    # if current_user:
+    #     if results and len(results) > 0:
+    #         history_data = HistoryCreate(
+    #             command_text=query,
+    #             status="FOUND",
+    #             program_ids=[results[0].id]
+    #         )
+    #     else:
+    #         history_data = HistoryCreate(
+    #             command_text=query,
+    #             status="NOT_FOUND",
+    #             program_ids=[]
+    #         )
+    #     create_history(db=db, history_in=history_data, user_id=current_user.id)
+
+    # 2. Trả về kết quả tìm kiếm cho Frontend như bình thường (Dù là Khách hay User)
     return results
 
 
@@ -115,44 +109,39 @@ def explain_command_api(
     """
     # 1. Gọi hàm parser (result bây giờ là một List các object)
     result = explain_command(db, full_command=query)
-    
-    # 2. Xử lý lưu lịch sử
-    if current_user:
-        if result and len(result) > 0:
-            # Thu thập tất cả các ID của các lệnh tìm thấy trong chuỗi
-            found_ids = [
-                item["program"]["id"] 
-                for item in result 
-                if item["program"]["is_found"] and item["program"]["id"] is not None
-            ]
 
-            total_commands = len(result)
-            found_count = len(found_ids)
+    # [TẠM THỜI TẮT] Lưu lịch sử tìm kiếm đã được chuyển sang Frontend.
+    # Nếu cần bật lại logic cũ, uncomment đoạn code dưới đây:
+    # if current_user:
+    #     if result and len(result) > 0:
+    #         found_ids = [
+    #             item["program"]["id"]
+    #             for item in result
+    #             if item["program"]["is_found"] and item["program"]["id"] is not None
+    #         ]
+    #         total_commands = len(result)
+    #         found_count = len(found_ids)
+    #         if found_count == total_commands:
+    #             overall_status = "FOUND"
+    #         elif found_count == 0:
+    #             overall_status = "NOT_FOUND"
+    #         else:
+    #             overall_status = "PARTIAL"
+    #         history_data = HistoryCreate(
+    #             command_text=query,
+    #             status=overall_status,
+    #             program_ids=found_ids
+    #         )
+    #     else:
+    #         history_data = HistoryCreate(
+    #             command_text=query,
+    #             status="NOT_FOUND",
+    #             program_ids=[]
+    #         )
+    #     create_history(db=db, history_in=history_data, user_id=current_user.id)
 
-            # ĐÁNH GIÁ TRẠNG THÁI (STATUS LOGIC)
-            if found_count == total_commands:
-                overall_status = "FOUND"
-            elif found_count == 0:
-                overall_status = "NOT_FOUND"
-            else:
-                overall_status = "PARTIAL"
-            
-            history_data = HistoryCreate(
-                command_text=query,
-                status=overall_status,
-                program_ids=found_ids
-            )
-        else:
-            history_data = HistoryCreate(
-                command_text=query,
-                status="NOT_FOUND",
-                program_ids=[]
-            )
-            
-        create_history(db=db, history_in=history_data, user_id=current_user.id)
-
-    # 3. Trả về kết quả trực tiếp cho Frontend
-    # Đã bỏ phần raise HTTPException 404 để Frontend tự xử lý giao diện hiển thị 
+    # 2. Trả về kết quả trực tiếp cho Frontend
+    # Đã bỏ phần raise HTTPException 404 để Frontend tự xử lý giao diện hiển thị
     # các từ khóa không tìm thấy thông qua cờ `is_found = False`.
     return result
 
