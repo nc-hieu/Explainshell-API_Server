@@ -34,6 +34,7 @@ class ProgramBase(BaseModel):
     # man_page_url: Optional[str] = None
     description: Optional[str] = None
     is_featured: bool = False
+    is_bsd_style: bool = False # Đánh dấu lệnh dùng BSD-style options (VD: ps aux, tar zcf)
 
 
 # ==========================================
@@ -56,6 +57,7 @@ class ProgramUpdate(BaseModel):
     slug: Optional[str] = None
     description: Optional[str] = None
     is_featured: Optional[bool] = None
+    is_bsd_style: Optional[bool] = None
     category_ids: Optional[List[int]] = None # Dùng để cập nhật lại danh mục nếu cần
 
 

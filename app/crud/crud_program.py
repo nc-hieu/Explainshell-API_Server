@@ -15,7 +15,7 @@ from typing import List, Optional
 # ==========================================
 SHELL_OPERATORS = ['|', ';', '&&', '||', '>', '>>', '<']
 REDIRECT_OPERATORS = {'>', '>>', '<'}
-BSD_PROGRAMS = {'ps', 'tar'}
+MAX_PROGRAM_TOKENS = 3
 
 # ==========================================
 # 1. CÁC HÀM ĐỌC DỮ LIỆU (READ)
@@ -135,18 +135,28 @@ def explain_command(db: Session, full_command: str):
         commands_list = commands_list[:30]
 
     # 3. Batch query Programs và Options để tránh N+1
-    unique_names = list({
-        os.path.basename(cmd_parts[0]).lower()
-        for cmd_parts in commands_list
-        if cmd_parts and cmd_parts[0] not in SHELL_OPERATORS
-    })
+    # Thu thập tất cả candidate prefix (tối đa MAX_PROGRAM_TOKENS token) từ mọi segment
+    all_candidates = set()
+    for cmd_parts in commands_list:
+        if not cmd_parts or cmd_parts[0] in SHELL_OPERATORS:
+            continue
+        # Xử lý đường dẫn: /usr/bin/ls -> ls
+        lookup_tokens = list(cmd_parts)
+        if '/' in cmd_parts[0]:
+            lookup_tokens[0] = os.path.basename(cmd_parts[0])
+        for i in range(1, min(MAX_PROGRAM_TOKENS, len(lookup_tokens)) + 1):
+            # Dừng nếu gặp operator trong cụm token
+            if any(t in SHELL_OPERATORS for t in lookup_tokens[:i]):
+                break
+            candidate = ' '.join(lookup_tokens[:i]).lower()
+            all_candidates.add(candidate)
 
     programs_by_name = {}
     options_by_program_id = {}
 
-    if unique_names:
+    if all_candidates:
         all_programs = db.query(Program)\
-                         .filter(func.lower(Program.name).in_(unique_names))\
+                         .filter(func.lower(Program.name).in_(list(all_candidates)))\
                          .order_by(Program.id)\
                          .all()
         programs_by_name = {p.name.lower(): p for p in all_programs}
@@ -165,20 +175,39 @@ def explain_command(db: Session, full_command: str):
         if not cmd_parts:
             continue
 
-        program_name = cmd_parts[0]
-        args = cmd_parts[1:]
-
-        # Xác định loại segment
-        segment_type = "operator" if program_name in SHELL_OPERATORS else "command"
+        # Xác định loại segment dựa vào token đầu
+        segment_type = "operator" if cmd_parts[0] in SHELL_OPERATORS else "command"
         if previous_segment_was_redirect and segment_type == "command":
             segment_type = "redirect_target"
-        previous_segment_was_redirect = program_name in REDIRECT_OPERATORS
+        previous_segment_was_redirect = cmd_parts[0] in REDIRECT_OPERATORS
 
-        # Tìm program bằng basename, case-insensitive
+        # Tìm program bằng longest prefix match
         program = None
+        program_end_index = 0
+
         if segment_type == "command":
-            lookup_name = os.path.basename(program_name).lower()
-            program = programs_by_name.get(lookup_name)
+            # Nếu token đầu là đường dẫn, dùng basename để lookup
+            lookup_tokens = list(cmd_parts)
+            if '/' in cmd_parts[0]:
+                lookup_tokens[0] = os.path.basename(cmd_parts[0])
+
+            # Tìm prefix dài nhất có trong DB
+            for i in range(min(MAX_PROGRAM_TOKENS, len(lookup_tokens)), 0, -1):
+                candidate = ' '.join(lookup_tokens[:i]).lower()
+                if candidate in programs_by_name:
+                    program = programs_by_name[candidate]
+                    program_end_index = i
+                    break
+
+            # Nếu không match prefix nào, mặc định lấy token đầu
+            if program_end_index == 0:
+                program_end_index = 1
+        else:
+            # Operator / redirect_target: dùng toàn bộ token làm tên
+            program_end_index = 1
+
+        program_name = ' '.join(cmd_parts[:program_end_index])
+        args = cmd_parts[program_end_index:]
 
         # Đóng gói thông tin Program kèm cờ is_found
         program_info = {
@@ -330,8 +359,8 @@ def explain_command(db: Session, full_command: str):
                         j += 1
                     i += 1
                     continue
-                # BSD-style flags (tar zcf, ps aux)
-                if (program and program.name.lower() in BSD_PROGRAMS
+                # BSD-style flags (tar zcf, ps aux) - chỉ áp dụng nếu program được đánh dấu BSD
+                if (program and program.is_bsd_style
                         and not arg.startswith('-') and '/' not in arg and '.' not in arg):
                     # Bước 1: Thử match nguyên cụm trước (VD: 123, +123)
                     whole_opt = lookup_nodash(arg)

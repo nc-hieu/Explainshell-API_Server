@@ -11,7 +11,7 @@ class Example(Base):
     group_id = Column(Integer, ForeignKey("option_groups.id", ondelete="SET NULL"))
     option_id = Column(Integer, ForeignKey("options.id", ondelete="SET NULL"))
     
-    command_line = Column(Text, nullable=False)
+    command_line = Column(Text, nullable=True)
     explanation = Column(Text)
     is_common = Column(Boolean, default=True)
     

@@ -15,7 +15,8 @@ class Program(Base):
     name = Column(String(100), unique=True, nullable=False, index=True)
     slug = Column(String(255), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
-    is_featured = Column(Boolean, default=False) 
+    is_featured = Column(Boolean, default=False)
+    is_bsd_style = Column(Boolean, default=False)
     
     # created_at dùng server_default để PostgreSQL tự điền thời gian hiện tại
     created_at = Column(DateTime, server_default=func.now())

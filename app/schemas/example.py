@@ -6,7 +6,7 @@ from pydantic import BaseModel
 # ==========================================
 class ExampleBase(BaseModel):
     """Các trường thông tin cơ bản của một Ví dụ"""
-    command_line: str                     # Câu lệnh ví dụ (VD: "ls -la /var/log")
+    command_line: Optional[str] = None    # Câu lệnh ví dụ (VD: "ls -la /var/log")
     explanation: Optional[str] = None     # Giải thích câu lệnh này làm gì
     is_common: bool = True                # Đánh dấu đây là ví dụ phổ biến (hiện lên đầu)
     
