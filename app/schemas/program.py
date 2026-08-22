@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # LƯU Ý: Để dùng được ProgramDetail ở cuối file, 
 # bạn cần đảm bảo đã có các file schema cơ bản cho các bảng liên quan.
@@ -36,6 +36,11 @@ class ProgramBase(BaseModel):
     is_featured: bool = False
     is_bsd_style: bool = False # Đánh dấu lệnh dùng BSD-style options (VD: ps aux, tar zcf)
 
+    @field_validator('name', 'slug')
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip() if v else v
+
 
 # ==========================================
 # 2. SCHEMA DÙNG KHI THÊM / SỬA (Request)
@@ -59,6 +64,11 @@ class ProgramUpdate(BaseModel):
     is_featured: Optional[bool] = None
     is_bsd_style: Optional[bool] = None
     category_ids: Optional[List[int]] = None # Dùng để cập nhật lại danh mục nếu cần
+
+    @field_validator('name', 'slug')
+    @classmethod
+    def strip_whitespace(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip() if v else v
 
 
 # ==========================================

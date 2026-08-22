@@ -38,9 +38,9 @@ def get_programs(db: Session, skip: int = 0, limit: int = 100) -> List[Program]:
 
 
 def get_program_by_name(db: Session, name: str):
-    """Lấy lệnh theo tên, không phân biệt hoa/thường (Để kiểm tra trùng lặp khi tạo mới)"""
+    """Lấy lệnh theo tên, không phân biệt hoa/thường và khoảng trắng đầu/cuối (Để kiểm tra trùng lặp khi tạo mới)"""
     return db.query(Program)\
-             .filter(func.lower(Program.name) == name.lower())\
+             .filter(func.lower(func.trim(Program.name)) == name.lower().strip())\
              .options(selectinload(Program.categories))\
              .first()
 
@@ -148,7 +148,7 @@ def explain_command(db: Session, full_command: str):
             # Dừng nếu gặp operator trong cụm token
             if any(t in SHELL_OPERATORS for t in lookup_tokens[:i]):
                 break
-            candidate = ' '.join(lookup_tokens[:i]).lower()
+            candidate = ' '.join(lookup_tokens[:i]).lower().strip()
             all_candidates.add(candidate)
 
     programs_by_name = {}
@@ -156,10 +156,11 @@ def explain_command(db: Session, full_command: str):
 
     if all_candidates:
         all_programs = db.query(Program)\
-                         .filter(func.lower(Program.name).in_(list(all_candidates)))\
+                         .filter(func.lower(func.trim(Program.name)).in_(list(all_candidates)))\
                          .order_by(Program.id)\
                          .all()
-        programs_by_name = {p.name.lower(): p for p in all_programs}
+        # Build map với key đã strip để tương thích dữ liệu cũ có khoảng trắng thừa
+        programs_by_name = {p.name.lower().strip(): p for p in all_programs}
 
         program_ids = [p.id for p in all_programs]
         if program_ids:
@@ -193,7 +194,7 @@ def explain_command(db: Session, full_command: str):
 
             # Tìm prefix dài nhất có trong DB
             for i in range(min(MAX_PROGRAM_TOKENS, len(lookup_tokens)), 0, -1):
-                candidate = ' '.join(lookup_tokens[:i]).lower()
+                candidate = ' '.join(lookup_tokens[:i]).lower().strip()
                 if candidate in programs_by_name:
                     program = programs_by_name[candidate]
                     program_end_index = i
