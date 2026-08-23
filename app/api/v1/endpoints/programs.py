@@ -158,6 +158,17 @@ def read_program_details_api(
     program = get_program_details(db, program_id=id)
     if not program:
         raise HTTPException(status_code=404, detail="Không tìm thấy chương trình này.")
+    # Sắp xếp các relationship list theo id để thứ tự ổn định
+    if program.options:
+        program.options = sorted(program.options, key=lambda opt: opt.id)
+    if program.option_groups:
+        program.option_groups = sorted(program.option_groups, key=lambda og: og.id)
+    if program.examples:
+        program.examples = sorted(program.examples, key=lambda ex: ex.id)
+    if program.notes:
+        program.notes = sorted(program.notes, key=lambda note: note.id)
+    if program.man_pages:
+        program.man_pages = sorted(program.man_pages, key=lambda mp: mp.id)
     return program
 
 @router.get("/slug/{slug}/details", response_model=ProgramDetail)
@@ -169,9 +180,17 @@ def read_program_details_by_slug_api(
     program = get_program_details_by_slug(db, slug=slug)
     if not program:
         raise HTTPException(status_code=404, detail="Không tìm thấy câu lệnh này.")
-    # Sắp xếp options theo id tại đây để tránh thay đổi trạng thái ORM trong session
+    # Sắp xếp các relationship list theo id để thứ tự ổn định
     if program.options:
         program.options = sorted(program.options, key=lambda opt: opt.id)
+    if program.option_groups:
+        program.option_groups = sorted(program.option_groups, key=lambda og: og.id)
+    if program.examples:
+        program.examples = sorted(program.examples, key=lambda ex: ex.id)
+    if program.notes:
+        program.notes = sorted(program.notes, key=lambda note: note.id)
+    if program.man_pages:
+        program.man_pages = sorted(program.man_pages, key=lambda mp: mp.id)
     return program
 
 @router.get("/{id}", response_model=ProgramSchema)
