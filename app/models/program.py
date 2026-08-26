@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
@@ -17,6 +17,7 @@ class Program(Base):
     description = Column(Text, nullable=True)
     is_featured = Column(Boolean, default=False)
     is_bsd_style = Column(Boolean, default=False)
+    alias_of_program_id = Column(Integer, ForeignKey('programs.id'), nullable=True)
     
     # created_at dùng server_default để PostgreSQL tự điền thời gian hiện tại
     created_at = Column(DateTime, server_default=func.now())
@@ -49,6 +50,13 @@ class Program(Base):
 
     # 7. Quan hệ với Man Page (1 Program có nhiều Sections trong Man Page)
     man_pages = relationship("ManPage", back_populates="program", cascade="all, delete-orphan")
+
+    # 8. Quan hệ alias: Program này là bản sao của Program chuẩn (canonical)
+    canonical_program = relationship(
+        "Program",
+        remote_side=[id],
+        foreign_keys=[alias_of_program_id]
+    )
 
 
     def __repr__(self):

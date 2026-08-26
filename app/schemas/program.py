@@ -35,6 +35,7 @@ class ProgramBase(BaseModel):
     description: Optional[str] = None
     is_featured: bool = False
     is_bsd_style: bool = False # Đánh dấu lệnh dùng BSD-style options (VD: ps aux, tar zcf)
+    alias_of_program_id: Optional[int] = None # Nếu là alias, trỏ đến program chuẩn (canonical)
 
     @field_validator('name', 'slug')
     @classmethod
@@ -63,6 +64,7 @@ class ProgramUpdate(BaseModel):
     description: Optional[str] = None
     is_featured: Optional[bool] = None
     is_bsd_style: Optional[bool] = None
+    alias_of_program_id: Optional[int] = None # Set để trở thành alias, set None để gỡ alias
     category_ids: Optional[List[int]] = None # Dùng để cập nhật lại danh mục nếu cần
 
     @field_validator('name', 'slug')
@@ -84,6 +86,11 @@ class Program(ProgramBase):
     updated_at: datetime
 
     categories: List[CategoryInfoForProgram] = []
+
+    @property
+    def is_alias(self) -> bool:
+        """Frontend dùng để hiển thị badge 'Alias'"""
+        return self.alias_of_program_id is not None
 
     class Config:
         from_attributes = True # Bắt buộc có để Pydantic dịch được object SQLAlchemy

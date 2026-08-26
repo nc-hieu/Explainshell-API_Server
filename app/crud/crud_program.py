@@ -21,6 +21,41 @@ MAX_PROGRAM_TOKENS = 3
 # 1. CÁC HÀM ĐỌC DỮ LIỆU (READ)
 # ==========================================
 
+def validate_alias(db: Session, program_id: Optional[int], alias_of_program_id: Optional[int]) -> Optional[Program]:
+    """
+    Kiểm tra alias hợp lệ:
+    - alias target phải tồn tại
+    - không được tự alias chính mình
+    - alias target không được là alias của ai khác (depth = 1)
+    Trả về program chuẩn nếu hợp lệ, raise ValueError nếu không.
+    """
+    if alias_of_program_id is None:
+        return None
+
+    if program_id is not None and program_id == alias_of_program_id:
+        raise ValueError("Program không thể tự alias chính mình.")
+
+    canonical = db.query(Program).filter(Program.id == alias_of_program_id).first()
+    if not canonical:
+        raise ValueError("Program chuẩn không tồn tại.")
+
+    if canonical.alias_of_program_id is not None:
+        raise ValueError("Không được alias lồng nhau (depth = 1).")
+
+    return canonical
+
+
+def get_effective_program(db: Session, program: Program) -> Program:
+    """
+    Nếu program là alias, trả về program chuẩn để lấy options.
+    """
+    if program.alias_of_program_id is not None:
+        canonical = db.query(Program).filter(Program.id == program.alias_of_program_id).first()
+        if canonical:
+            return canonical
+    return program
+
+
 def get_program(db: Session, program_id: int) -> Optional[Program]:
     """Lấy thông tin Program và kèm theo danh mục của nó"""
     return db.query(Program)\
@@ -55,8 +90,9 @@ def get_program_details_by_slug(db: Session, slug: str):
     Lấy chi tiết 1 lệnh dựa vào Slug.
     Lưu ý: Không sắp xếp options tại đây để tránh thay đổi trạng thái ORM trong session.
     Việc sắp xếp sẽ được thực hiện ở tầng API nếu cần.
+    Nếu program là alias, sẽ load options từ program chuẩn (canonical).
     """
-    return db.query(Program).options(
+    program = db.query(Program).options(
         selectinload(Program.categories),
         selectinload(Program.option_groups),
         selectinload(Program.options),
@@ -64,20 +100,45 @@ def get_program_details_by_slug(db: Session, slug: str):
         selectinload(Program.man_pages)
     ).filter(Program.slug == slug).first()
 
+    # Nếu là alias, thay options bằng options của canonical
+    if program and program.alias_of_program_id is not None:
+        canonical = db.query(Program).options(
+            selectinload(Program.options),
+            selectinload(Program.option_groups)
+        ).filter(Program.id == program.alias_of_program_id).first()
+        if canonical:
+            program.options = canonical.options
+            program.option_groups = canonical.option_groups
+
+    return program
+
 
 def get_program_details(db: Session, program_id: int):
     """
     [QUAN TRỌNG] Lấy toàn bộ chi tiết của 1 lệnh.
     Dùng `selectinload` để tải sẵn Categories, Options, Groups và Examples.
     Việc này giúp tránh lỗi N+1 Query, tăng tốc độ phản hồi API lên gấp nhiều lần!
+    Nếu program là alias, sẽ load options từ program chuẩn (canonical).
     """
-    return db.query(Program).options(
+    program = db.query(Program).options(
         selectinload(Program.categories),
         selectinload(Program.option_groups),
         selectinload(Program.options),
         selectinload(Program.examples)
         # selectinload(Program.man_pages) # Mở ra nếu bạn dùng bảng này
     ).filter(Program.id == program_id).first()
+
+    # Nếu là alias, thay options bằng options của canonical
+    if program and program.alias_of_program_id is not None:
+        canonical = db.query(Program).options(
+            selectinload(Program.options),
+            selectinload(Program.option_groups)
+        ).filter(Program.id == program.alias_of_program_id).first()
+        if canonical:
+            program.options = canonical.options
+            program.option_groups = canonical.option_groups
+
+    return program
 
 
 def search_programs(db: Session, query: str):
@@ -162,7 +223,15 @@ def explain_command(db: Session, full_command: str):
         # Build map với key đã strip để tương thích dữ liệu cũ có khoảng trắng thừa
         programs_by_name = {p.name.lower().strip(): p for p in all_programs}
 
-        program_ids = [p.id for p in all_programs]
+        # Load thêm các program chuẩn (canonical) cho alias
+        alias_ids = {p.alias_of_program_id for p in all_programs if p.alias_of_program_id}
+        programs_by_id = {p.id: p for p in all_programs}
+        if alias_ids:
+            canonical_programs = db.query(Program).filter(Program.id.in_(alias_ids)).all()
+            for cp in canonical_programs:
+                programs_by_id[cp.id] = cp
+
+        program_ids = [p.id for p in programs_by_id.values()]
         if program_ids:
             all_options = db.query(Option).filter(Option.program_id.in_(program_ids)).all()
             for opt in all_options:
@@ -232,7 +301,11 @@ def explain_command(db: Session, full_command: str):
             long_opt_map_lower = {}
 
             if program:
-                for opt in options_by_program_id.get(program.id, []):
+                # Nếu program là alias, dùng options của program chuẩn (canonical)
+                effective_program = program
+                if program.alias_of_program_id is not None:
+                    effective_program = programs_by_id.get(program.alias_of_program_id, program)
+                for opt in options_by_program_id.get(effective_program.id, []):
                     if opt.short_name:
                         name = opt.short_name
                         if name.startswith('-'):
@@ -487,8 +560,11 @@ def get_programs_by_topic_slug(
 # ==========================================
 
 def create_program(db: Session, program_in: ProgramCreate):
-    """Tạo lệnh mới, có xử lý tự động gán Danh mục (Categories)"""
-    
+    """Tạo lệnh mới, có xử lý tự động gán Danh mục (Categories) và validate alias"""
+
+    # Validate alias trước khi tạo
+    validate_alias(db, program_id=None, alias_of_program_id=program_in.alias_of_program_id)
+
     # 1. Tách category_ids ra khỏi dữ liệu chính (vì bảng Program không có cột này)
     program_data = program_in.model_dump(exclude={"category_ids"})
     db_program = Program(**program_data)
@@ -505,13 +581,17 @@ def create_program(db: Session, program_in: ProgramCreate):
 
 
 def update_program(db: Session, program_id: int, program_in: ProgramUpdate):
-    """Cập nhật lệnh, có hỗ trợ cập nhật lại danh sách Danh mục"""
+    """Cập nhật lệnh, có hỗ trợ cập nhật lại danh sách Danh mục và validate alias"""
     db_program = get_program(db, program_id)
     if not db_program:
         return None
 
     update_data = program_in.model_dump(exclude_unset=True) # Chỉ lấy những trường được gửi lên
-    
+
+    # Validate alias nếu có thay đổi
+    if "alias_of_program_id" in update_data:
+        validate_alias(db, program_id=program_id, alias_of_program_id=update_data["alias_of_program_id"])
+
     # Xử lý cập nhật danh mục riêng biệt
     if "category_ids" in update_data:
         category_ids = update_data.pop("category_ids")
@@ -519,7 +599,7 @@ def update_program(db: Session, program_id: int, program_in: ProgramUpdate):
         categories = db.query(Category).filter(Category.id.in_(category_ids)).all()
         db_program.categories = categories
 
-    # Cập nhật các trường thông tin chữ (name, description, is_featured)
+    # Cập nhật các trường thông tin chữ (name, description, is_featured, alias_of_program_id)
     for key, value in update_data.items():
         setattr(db_program, key, value)
 
@@ -529,9 +609,16 @@ def update_program(db: Session, program_id: int, program_in: ProgramUpdate):
 
 
 def delete_program(db: Session, program_id: int):
-    """Xóa lệnh (PostgreSQL sẽ tự động CASCADE xóa luôn các Options, Examples...)"""
+    """
+    Xóa lệnh (PostgreSQL sẽ tự động CASCADE xóa luôn các Options, Examples...).
+    Nếu xóa program chuẩn, các alias sẽ tự động mất alias (set NULL).
+    """
     db_program = get_program(db, program_id)
     if db_program:
+        # Set NULL alias cho các program đang alias tới program này
+        db.query(Program).filter(Program.alias_of_program_id == program_id).update(
+            {"alias_of_program_id": None}
+        )
         db.delete(db_program)
         db.commit()
     return db_program

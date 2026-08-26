@@ -261,7 +261,10 @@ def create_program_api(
     if program_by_slug:
         raise HTTPException(status_code=400, detail="Slug này đã tồn tại trong hệ thống.")
 
-    return create_program(db=db, program_in=program_in)
+    try:
+        return create_program(db=db, program_in=program_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{id}", response_model=ProgramSchema)
 def update_program_api(
@@ -282,7 +285,10 @@ def update_program_api(
         if existing_program:
             raise HTTPException(status_code=400, detail="Tên lệnh mới đã bị trùng lặp.")
 
-    return update_program(db=db, program_id=id, program_in=program_in)
+    try:
+        return update_program(db=db, program_id=id, program_in=program_in)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.delete("/{id}", response_model=ProgramSchema)
 def delete_program_api(
